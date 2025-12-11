@@ -1,0 +1,28 @@
+# ########## 二进制文件：禁止 Git 转换 ##########
+# 字体文件
+*.woff    binary
+*.woff2   binary
+*.ttf     binary
+*.eot     binary
+*.otf     binary
+# 图片文件
+*.png     binary
+*.jpg     binary
+*.jpeg    binary
+*.gif     binary
+*.svg     binary
+# 其他常见二进制文件
+*.zip     binary
+*.rar     binary
+*.exe     binary
+*.dll     binary
+
+# ########## 文本文件：允许 Git 转换（可选，按需配置） ##########
+# 代码文件（明确告诉 Git 这些是文本，可安全转换换行符）
+*.java    text
+*.js      text
+*.css     text
+*.html    text
+*.vue     text
+*.xml     text
+*.json    text

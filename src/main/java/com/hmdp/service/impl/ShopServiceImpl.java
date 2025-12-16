@@ -10,6 +10,12 @@ import com.hmdp.entity.Shop;
 import com.hmdp.mapper.ShopMapper;
 import com.hmdp.service.IShopService;
 import com.hmdp.utils.CacheClient;
+import org.springframework.amqp.core.ExchangeTypes;
+import org.springframework.amqp.rabbit.annotation.Exchange;
+import org.springframework.amqp.rabbit.annotation.Queue;
+import org.springframework.amqp.rabbit.annotation.QueueBinding;
+import org.springframework.amqp.rabbit.annotation.RabbitListener;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,6 +43,8 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
     private StringRedisTemplate stringRedisTemplate;
     @Resource
     private CacheClient cacheClient;
+    @Resource
+    private RabbitTemplate rabbitTemplate;
 
     @Override
     @Transactional
@@ -53,10 +61,16 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
         if(shop.getId() == null){
             return Result.fail("店铺ID不能为空");
         }
-        //更新数据库
+        // 更新数据库
         updateById(shop);
-        //删除缓存
+        // 删除缓存
         stringRedisTemplate.delete(CACHE_SHOP_KEY + shop.getId());
+        // 发广播消息清空所有节点的 Caffeine
+        rabbitTemplate.convertAndSend(
+                "clearMessage.fanout",
+                "",
+                CACHE_SHOP_KEY + shop.getId().toString()
+        );
 
         return Result.ok();
     }
@@ -83,6 +97,17 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
             localCache.put(key, shop);
         }
         return Result.ok(shop);
+    }
+
+    // 生产者进程处理1000个用户的请求，然后把信息发送到交换机里，再路由到另外几个进程的队列中
+    // 另外的进程拿到这1000个用户的请求后交由相关线程开始处理；
+    // 或者是一台服务器，一个进程内，某个线程把消息广播，由不同的线程处理
+    @RabbitListener(bindings = @QueueBinding(
+            value = @Queue(name = "clearMessage.queue"),
+            exchange = @Exchange(name = "clearMessage.fanout", type = ExchangeTypes.FANOUT)
+    ))
+    public void clearLocalShopCache(String key){
+        localCache.invalidate(key);
     }
 
 }
